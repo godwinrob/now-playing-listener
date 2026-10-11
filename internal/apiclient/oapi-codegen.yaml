@@ -1,0 +1,8 @@
+package: gen
+output: internal/apiclient/gen/client.gen.go
+generate:
+  client: true
+  models: true
+output-options:
+  include-tags:
+    - device
