@@ -14,7 +14,7 @@ func TestDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c.ServerURL != "http://tower.local:8080" || c.AudioDevice != "default" || c.SampleRate != 44100 || c.ClipSeconds != 10 ||
-		c.SearchInterval != 30*time.Second || c.TrackInterval != 2*time.Minute || c.HeartbeatInterval != 30*time.Second || c.SilenceDBFS != -45 {
+		c.SearchInterval != 30*time.Second || c.TrackInterval != 3*time.Minute || c.HeartbeatInterval != 30*time.Second || c.SilenceDBFS != -45 {
 		t.Fatalf("%+v", c)
 	}
 }

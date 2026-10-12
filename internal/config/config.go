@@ -18,7 +18,7 @@ type Config struct {
 	SampleRate        int
 	ClipSeconds       int
 	SearchInterval    time.Duration // between clips while looking for a record
-	TrackInterval     time.Duration // between clips once a record is recognized
+	TrackInterval     time.Duration // between clips once a match is confirmed
 	HeartbeatInterval time.Duration
 	SilenceDBFS       float64
 	LogLevel          slog.Level
@@ -64,7 +64,7 @@ func Load(getenv func(string) string) (Config, error) {
 		SampleRate:        integer("NPL_SAMPLE_RATE", 44100, 8000, 48000),
 		ClipSeconds:       integer("NPL_CLIP_SECONDS", 10, 5, 30),
 		SearchInterval:    dur("NPL_SEARCH_INTERVAL", 30*time.Second, 5*time.Second),
-		TrackInterval:     dur("NPL_TRACK_INTERVAL", 2*time.Minute, 10*time.Second),
+		TrackInterval:     dur("NPL_TRACK_INTERVAL", 3*time.Minute, 10*time.Second),
 		HeartbeatInterval: dur("NPL_HEARTBEAT_INTERVAL", 30*time.Second, 5*time.Second),
 		SilenceDBFS:       -45,
 	}
