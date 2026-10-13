@@ -91,6 +91,7 @@ In `/etc/now-playing/listener.env`; see `deploy/listener.env.example`.
 | `NPL_SERVER_URL` | | The server's address, e.g. `http://tower.local:8080` |
 | `NPL_API_KEY` | | The API key (`NPL_DEVICE_TOKEN` is the old name and still works) |
 | `NPL_ALSA_DEVICE` | `default` | The capture device; a USB card is usually `plughw:1,0` |
+| `NPL_AUDIO_FILE` | | For development without a sound card: a 16-bit WAV file to loop as the microphone, or `tone` for a test tone. Replaces `NPL_ALSA_DEVICE` |
 | `NPL_SAMPLE_RATE` | `44100` | 8000 to 48000 |
 | `NPL_CLIP_SECONDS` | `10` | 5 to 30. The server accepts clips up to 2 MB: seconds x rate x 2 bytes |
 | `NPL_SEARCH_INTERVAL` | `30s` | Between clips while no record is recognized |
@@ -112,6 +113,8 @@ Three calls, all with `Authorization: Bearer <API key>`:
 ## Develop and release
 
 ```sh
+tilt up                         # listener rebuilt on every change, tests beside it (needs Tilt)
+tilt up -- --with-server        # the same, plus the Now Playing server and web app from ../now-playing
 make test                       # gofmt, go vet, go test
 make package VERSION=v1.2.3     # the release files, in dist/, exactly as a tag builds them
 make pi                         # just the linux/arm64 binary
@@ -126,3 +129,10 @@ git push origin v1.2.3
 
 The **Release** workflow tests, packages and publishes the GitHub release. Run it by hand from the
 Actions tab to get the same files as a downloadable artifact without publishing.
+
+### Without a sound card
+
+`tilt up` runs the listener with `NPL_AUDIO_FILE=tone`, so it uploads clips and sends heartbeats like a
+Pi would, on any computer. Put your own `.env` here to change that (`NPL_AUDIO_FILE=some.wav` to loop
+a recording, or `NPL_ALSA_DEVICE=plughw:1,0` on a Pi). Without `.env`, the server address and key are
+read from `../now-playing/.env`, so they match.

@@ -48,7 +48,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	case "run":
 		err = listen(ctx, getenv, stderr)
 	case "test-mic":
-		err = testMic(ctx, audio.NewArecord(config.LoadMic(getenv).AudioDevice, config.LoadMic(getenv).SampleRate), config.LoadMic(getenv), stdout)
+		micCfg := config.LoadMic(getenv)
+		var mic audio.Capturer
+		if mic, err = newCapturer(micCfg); err == nil {
+			err = testMic(ctx, mic, micCfg, stdout)
+		}
 	case "version":
 		fmt.Fprintf(stdout, "listener %s\n", version)
 	case "help", "-h", "--help":
@@ -76,13 +80,17 @@ func listen(ctx context.Context, getenv func(string) string, stderr io.Writer) e
 	if err != nil {
 		return err
 	}
+	mic, err := newCapturer(cfg)
+	if err != nil {
+		return err
+	}
 	a := agent.New(agent.Settings{
 		ClipLength:        time.Duration(cfg.ClipSeconds) * time.Second,
 		SearchInterval:    cfg.SearchInterval,
 		TrackInterval:     cfg.TrackInterval,
 		HeartbeatInterval: cfg.HeartbeatInterval,
 		SilenceDBFS:       cfg.SilenceDBFS,
-	}, audio.NewArecord(cfg.AudioDevice, cfg.SampleRate), srv, agent.RealClock{}, log)
+	}, mic, srv, agent.RealClock{}, log)
 	err = a.Run(ctx)
 	// Tell the server the microphone is off now, instead of leaving it to time out. ctx is already
 	// cancelled on a normal stop, so this uses its own short deadline.
@@ -131,4 +139,13 @@ func testMic(ctx context.Context, mic audio.Capturer, cfg config.Config, out io.
 func meter(level float64) string {
 	n := int((level - audio.FloorDBFS) / 3) // 40 characters from -120 to 0 dBFS
 	return strings.Repeat("█", max(n, 0))
+}
+
+// newCapturer is the microphone: a WAV file or test tone when NPL_AUDIO_FILE is set (for development
+// without audio hardware), otherwise the ALSA device.
+func newCapturer(cfg config.Config) (audio.Capturer, error) {
+	if cfg.AudioFile != "" {
+		return audio.NewFileSource(cfg.AudioFile)
+	}
+	return audio.NewArecord(cfg.AudioDevice, cfg.SampleRate), nil
 }

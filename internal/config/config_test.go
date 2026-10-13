@@ -55,3 +55,13 @@ func TestAPIKeyBeatsTheOldDeviceTokenName(t *testing.T) {
 		t.Fatalf("installs from before API keys should keep working: %+v %v", old, err)
 	}
 }
+
+func TestAudioFileReplacesTheDevice(t *testing.T) {
+	c, err := Load(env(map[string]string{"NPL_SERVER_URL": "http://tower.local:8080", "NPL_API_KEY": "k", "NPL_AUDIO_FILE": " tone "}))
+	if err != nil || c.AudioFile != "tone" {
+		t.Fatalf("%+v %v", c, err)
+	}
+	if LoadMic(env(map[string]string{"NPL_AUDIO_FILE": "x.wav"})).AudioFile != "x.wav" {
+		t.Error("test-mic should see NPL_AUDIO_FILE too")
+	}
+}

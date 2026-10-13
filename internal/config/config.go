@@ -15,6 +15,7 @@ type Config struct {
 	ServerURL         string
 	DeviceToken       string
 	AudioDevice       string
+	AudioFile         string // NPL_AUDIO_FILE: a WAV file, or "tone", played as the microphone (development)
 	SampleRate        int
 	ClipSeconds       int
 	SearchInterval    time.Duration // between clips while looking for a record
@@ -61,6 +62,7 @@ func Load(getenv func(string) string) (Config, error) {
 
 	c := Config{
 		AudioDevice:       str("NPL_ALSA_DEVICE", "default"),
+		AudioFile:         str("NPL_AUDIO_FILE", ""),
 		SampleRate:        integer("NPL_SAMPLE_RATE", 44100, 8000, 48000),
 		ClipSeconds:       integer("NPL_CLIP_SECONDS", 10, 5, 30),
 		SearchInterval:    dur("NPL_SEARCH_INTERVAL", 30*time.Second, 5*time.Second),
@@ -105,6 +107,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("server_url", c.ServerURL),
 		slog.String("device_token", "[redacted]"),
 		slog.String("audio_device", c.AudioDevice),
+		slog.String("audio_file", c.AudioFile),
 		slog.Int("sample_rate", c.SampleRate),
 		slog.Int("clip_seconds", c.ClipSeconds),
 		slog.Duration("search_interval", c.SearchInterval),
@@ -120,6 +123,7 @@ func LoadMic(getenv func(string) string) Config {
 	if v := strings.TrimSpace(getenv("NPL_ALSA_DEVICE")); v != "" {
 		c.AudioDevice = v
 	}
+	c.AudioFile = strings.TrimSpace(getenv("NPL_AUDIO_FILE"))
 	if n, err := strconv.Atoi(strings.TrimSpace(getenv("NPL_SAMPLE_RATE"))); err == nil && n >= 8000 && n <= 48000 {
 		c.SampleRate = n
 	}
