@@ -1,0 +1,19 @@
+[Unit]
+Description=Now Playing listener (records the turntable and sends clips to the server)
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+User=nowplaying
+Group=audio
+EnvironmentFile=/etc/now-playing/listener.env
+ExecStart=/usr/local/bin/now-playing-listener
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/godwinrob/now-playing/apps/listener/internal/audio"
-	"github.com/godwinrob/now-playing/apps/listener/internal/server"
+	"github.com/godwinrob/now-playing-listener/internal/audio"
+	"github.com/godwinrob/now-playing-listener/internal/server"
 )
 
 type fakeClock struct{ now time.Time }

@@ -75,9 +75,12 @@ func Load(getenv func(string) string) (Config, error) {
 	} else if u, err := url.Parse(c.ServerURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		fail("NPL_SERVER_URL", "must be a full http:// or https:// URL")
 	}
-	c.DeviceToken = strings.TrimSpace(getenv("NPL_DEVICE_TOKEN"))
+	c.DeviceToken = strings.TrimSpace(getenv("NPL_API_KEY"))
 	if c.DeviceToken == "" {
-		fail("NPL_DEVICE_TOKEN", "is required (the same value as NP_DEVICE_TOKEN on the server)")
+		c.DeviceToken = strings.TrimSpace(getenv("NPL_DEVICE_TOKEN")) // what the key was called before API keys
+	}
+	if c.DeviceToken == "" {
+		fail("NPL_API_KEY", "is required: an API key made on the server's Host page (older installs used NPL_DEVICE_TOKEN)")
 	}
 	if raw := strings.TrimSpace(getenv("NPL_SILENCE_DBFS")); raw != "" {
 		f, err := strconv.ParseFloat(raw, 64)

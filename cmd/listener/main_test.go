@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/godwinrob/now-playing/apps/listener/internal/audio"
-	"github.com/godwinrob/now-playing/apps/listener/internal/config"
+	"github.com/godwinrob/now-playing-listener/internal/audio"
+	"github.com/godwinrob/now-playing-listener/internal/config"
 )
 
 type mic struct {
@@ -55,7 +55,7 @@ func TestTestMicSurfacesCaptureErrors(t *testing.T) {
 func TestRunReportsConfigProblems(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := run(context.Background(), []string{"run"}, func(string) string { return "" }, &out, &errOut)
-	if code != 1 || !strings.Contains(errOut.String(), "NPL_SERVER_URL") || !strings.Contains(errOut.String(), "NPL_DEVICE_TOKEN") {
+	if code != 1 || !strings.Contains(errOut.String(), "NPL_SERVER_URL") || !strings.Contains(errOut.String(), "NPL_API_KEY") {
 		t.Fatalf("code=%d\n%s", code, errOut.String())
 	}
 	if code := run(context.Background(), []string{"bogus"}, nil, &out, &errOut); code != 2 {

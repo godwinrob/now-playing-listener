@@ -1,20 +1,30 @@
-// Package server talks to the Now Playing server with the client generated from api/openapi.yaml.
+// Package server talks to the Now Playing server. The listener needs three calls (upload a clip,
+// heartbeat, sign off), so this is plain net/http rather than a client generated from the server's
+// OpenAPI contract: it keeps this repo from depending on the server's.
+//
+//	POST   /api/listen              multipart "audio" (WAV) and "recordedAt"; returns the recognition and mode
+//	POST   /api/listener/heartbeat  JSON {"level": dBFS, "mode": "searching"|"tracking"}; 204
+//	DELETE /api/listener/heartbeat  the microphone is off; 204
+//
+// Every call carries "Authorization: Bearer <API key>". Make the key on the server's Host page.
 package server
 
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
-
-	"github.com/godwinrob/now-playing/apps/listener/internal/apiclient/gen"
 )
 
-// ErrUnauthorized means the server rejected the device token.
-var ErrUnauthorized = errors.New("the server rejected the device token (check NPL_DEVICE_TOKEN against NP_DEVICE_TOKEN)")
+// ErrUnauthorized means the server rejected the API key.
+var ErrUnauthorized = errors.New("the server rejected the API key (check NPL_API_KEY; if it was revoked, make a new one on the Host page)")
 
 // Result is what the server made of a clip.
 type Result struct {
@@ -24,23 +34,21 @@ type Result struct {
 }
 
 type Client struct {
-	api *gen.ClientWithResponses
+	base  string
+	token string
+	http  *http.Client
 }
 
 func New(baseURL, token string, httpClient *http.Client) (*Client, error) {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	u, err := url.Parse(baseURL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil, fmt.Errorf("server address %q must be a full http:// or https:// URL", baseURL)
+	}
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 45 * time.Second}
 	}
-	api, err := gen.NewClientWithResponses(baseURL,
-		gen.WithHTTPClient(httpClient),
-		gen.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
-			req.Header.Set("Authorization", "Bearer "+token)
-			return nil
-		}))
-	if err != nil {
-		return nil, fmt.Errorf("creating API client: %w", err)
-	}
-	return &Client{api: api}, nil
+	return &Client{base: baseURL, token: token, http: httpClient}, nil
 }
 
 // Upload sends a WAV clip for recognition.
@@ -60,40 +68,97 @@ func (c *Client) Upload(ctx context.Context, wav []byte, recordedAt time.Time) (
 	if err := mw.Close(); err != nil {
 		return Result{}, err
 	}
-	resp, err := c.api.ListenWithBodyWithResponse(ctx, mw.FormDataContentType(), &body)
+	status, raw, err := c.do(ctx, http.MethodPost, "/api/listen", mw.FormDataContentType(), &body)
 	if err != nil {
 		return Result{}, fmt.Errorf("uploading clip: %w", err)
 	}
-	switch {
-	case resp.StatusCode() == http.StatusUnauthorized:
+	switch status {
+	case http.StatusOK:
+	case http.StatusUnauthorized:
 		return Result{}, ErrUnauthorized
-	case resp.JSON200 == nil:
-		return Result{}, apiError("uploading clip", resp.StatusCode(), resp.JSON400)
+	default:
+		return Result{}, apiError("uploading clip", status, raw)
 	}
-	r := Result{Mode: string(resp.JSON200.Mode), Outcome: string(resp.JSON200.Recognition.Outcome)}
-	if t := resp.JSON200.Recognition.MatchedTitle; t != nil {
-		r.Title = *t
+	var out struct {
+		Mode        string `json:"mode"`
+		Recognition struct {
+			Outcome      string  `json:"outcome"`
+			MatchedTitle *string `json:"matchedTitle"`
+		} `json:"recognition"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return Result{}, fmt.Errorf("reading the server's answer: %w", err)
+	}
+	r := Result{Mode: out.Mode, Outcome: out.Recognition.Outcome}
+	if out.Recognition.MatchedTitle != nil {
+		r.Title = *out.Recognition.MatchedTitle
 	}
 	return r, nil
 }
 
 // Heartbeat tells the server the listener is alive and how loud the room is.
 func (c *Client) Heartbeat(ctx context.Context, levelDBFS float64, mode string) error {
-	resp, err := c.api.HeartbeatWithResponse(ctx, gen.HeartbeatJSONRequestBody{Level: float32(levelDBFS), Mode: gen.HeartbeatRequestMode(mode)})
+	payload, err := json.Marshal(map[string]any{"level": levelDBFS, "mode": mode})
+	if err != nil {
+		return err
+	}
+	status, raw, err := c.do(ctx, http.MethodPost, "/api/listener/heartbeat", "application/json", bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("sending heartbeat: %w", err)
 	}
-	switch resp.StatusCode() {
+	switch status {
 	case http.StatusNoContent:
 		return nil
 	case http.StatusUnauthorized:
 		return ErrUnauthorized
 	}
-	return apiError("sending heartbeat", resp.StatusCode(), nil)
+	return apiError("sending heartbeat", status, raw)
 }
 
-func apiError(what string, status int, e *gen.Error) error {
-	if e != nil {
+// SignOff tells the server this listener is stopping, so it shows as offline at once instead of
+// after its heartbeats time out.
+func (c *Client) SignOff(ctx context.Context) error {
+	status, raw, err := c.do(ctx, http.MethodDelete, "/api/listener/heartbeat", "", nil)
+	if err != nil {
+		return fmt.Errorf("signing off: %w", err)
+	}
+	if status != http.StatusNoContent {
+		return apiError("signing off", status, raw)
+	}
+	return nil
+}
+
+func (c *Client) do(ctx context.Context, method, path, contentType string, body io.Reader) (int, []byte, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.base+path, body)
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		// url.Error would repeat the address; the cause is enough.
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	return resp.StatusCode, raw, err
+}
+
+// apiError describes a failed call, with the server's message when it sent one.
+func apiError(what string, status int, raw []byte) error {
+	var e struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(raw, &e) == nil && e.Error.Message != "" {
 		return fmt.Errorf("%s: HTTP %d: %s", what, status, e.Error.Message)
 	}
 	return fmt.Errorf("%s: HTTP %d", what, status)

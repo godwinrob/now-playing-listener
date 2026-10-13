@@ -1,0 +1,44 @@
+name: Release
+
+# Push a tag like v1.2.3 and this builds the Raspberry Pi packages (scripts/package.sh) and publishes
+# them as a GitHub release:
+#
+#   git tag v1.2.3 && git push origin v1.2.3
+#
+# Run it by hand from the Actions tab to build the same files as a downloadable artifact without
+# publishing anything.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./... && go test ./...
+      - name: Package
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then version="$GITHUB_REF_NAME"; else version="dev-${GITHUB_SHA::7}"; fi
+          bash scripts/package.sh "$version"
+      - name: Keep the files from a manual run
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: now-playing-listener-dist
+          path: dist/
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
+            --notes "Download the tarball for your Pi (arm64 for 64-bit Raspberry Pi OS, armv6 for 32-bit), unpack it and run setup.sh. See the README." \
+            dist/*.tar.gz dist/checksums.txt dist/now-playing-listener-linux-*

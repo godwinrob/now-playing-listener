@@ -13,10 +13,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/godwinrob/now-playing/apps/listener/internal/agent"
-	"github.com/godwinrob/now-playing/apps/listener/internal/audio"
-	"github.com/godwinrob/now-playing/apps/listener/internal/config"
-	"github.com/godwinrob/now-playing/apps/listener/internal/server"
+	"github.com/godwinrob/now-playing-listener/internal/agent"
+	"github.com/godwinrob/now-playing-listener/internal/audio"
+	"github.com/godwinrob/now-playing-listener/internal/config"
+	"github.com/godwinrob/now-playing-listener/internal/server"
 )
 
 // Set at build time: -ldflags "-X main.version=v1.2.3".
@@ -83,7 +83,15 @@ func listen(ctx context.Context, getenv func(string) string, stderr io.Writer) e
 		HeartbeatInterval: cfg.HeartbeatInterval,
 		SilenceDBFS:       cfg.SilenceDBFS,
 	}, audio.NewArecord(cfg.AudioDevice, cfg.SampleRate), srv, agent.RealClock{}, log)
-	if err := a.Run(ctx); err != nil {
+	err = a.Run(ctx)
+	// Tell the server the microphone is off now, instead of leaving it to time out. ctx is already
+	// cancelled on a normal stop, so this uses its own short deadline.
+	bye, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if serr := srv.SignOff(bye); serr != nil {
+		log.Debug("sign-off failed (the server will notice the missing heartbeats)", "err", serr)
+	}
+	if err != nil {
 		return err
 	}
 	log.Info("stopped")

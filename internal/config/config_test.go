@@ -24,7 +24,7 @@ func TestEveryProblemIsReported(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected errors")
 	}
-	for _, name := range []string{"NPL_SERVER_URL", "NPL_DEVICE_TOKEN", "NPL_SAMPLE_RATE", "NPL_SEARCH_INTERVAL", "NPL_SILENCE_DBFS", "NPL_LOG_LEVEL"} {
+	for _, name := range []string{"NPL_SERVER_URL", "NPL_API_KEY", "NPL_SAMPLE_RATE", "NPL_SEARCH_INTERVAL", "NPL_SILENCE_DBFS", "NPL_LOG_LEVEL"} {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("missing %s in:\n%v", name, err)
 		}
@@ -42,5 +42,16 @@ func TestLogValueHidesToken(t *testing.T) {
 	c := Config{DeviceToken: "super-secret"}
 	if strings.Contains(c.LogValue().String(), "super-secret") {
 		t.Fatal("token leaked")
+	}
+}
+
+func TestAPIKeyBeatsTheOldDeviceTokenName(t *testing.T) {
+	both, err := Load(env(map[string]string{"NPL_SERVER_URL": "http://tower.local:8080", "NPL_API_KEY": "npk_new", "NPL_DEVICE_TOKEN": "old"}))
+	if err != nil || both.DeviceToken != "npk_new" {
+		t.Fatalf("with both set the API key should win: %+v %v", both, err)
+	}
+	old, err := Load(env(map[string]string{"NPL_SERVER_URL": "http://tower.local:8080", "NPL_DEVICE_TOKEN": "old"}))
+	if err != nil || old.DeviceToken != "old" {
+		t.Fatalf("installs from before API keys should keep working: %+v %v", old, err)
 	}
 }

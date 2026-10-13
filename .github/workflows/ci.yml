@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l .; exit 1)
+      - run: go vet ./...
+      - run: go test -race ./...
+      - name: The scripts are valid shell
+        run: bash -n deploy/setup.sh scripts/package.sh
+      - name: A release can be packaged
+        run: |
+          bash scripts/package.sh ci
+          test -f dist/now-playing-listener_ci_linux_arm64.tar.gz
+          test -f dist/now-playing-listener_ci_linux_armv6.tar.gz
+          (cd dist && sha256sum -c checksums.txt)
+          # The binary and installer must come out executable (the Windows-built files may not be).
+          tar tvzf dist/now-playing-listener_ci_linux_arm64.tar.gz | grep -E "^-rwxr-xr-x .* [^ ]+/now-playing-listener$"
+          tar tvzf dist/now-playing-listener_ci_linux_arm64.tar.gz | grep -E "^-rwxr-xr-x .* [^ ]+/setup.sh$"

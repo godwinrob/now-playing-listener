@@ -100,3 +100,36 @@ func TestHeartbeatBody(t *testing.T) {
 		t.Fatalf("body %s", body)
 	}
 }
+
+func TestSignOffAndServerMessages(t *testing.T) {
+	var gotMethod, gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotAuth = r.Method, r.Header.Get("Authorization")
+		if r.URL.Path != "/api/listener/heartbeat" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	c, err := New(srv.URL, "npk_abc", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SignOff(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if gotMethod != http.MethodDelete || gotAuth != "Bearer npk_abc" {
+		t.Errorf("sign-off sent %s with %q", gotMethod, gotAuth)
+	}
+
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"code":"not_wav","message":"The clip must be a WAV file."}}`))
+	}))
+	defer bad.Close()
+	c2, _ := New(bad.URL, "k", nil)
+	_, err = c2.Upload(context.Background(), []byte("x"), time.Now())
+	if err == nil || !strings.Contains(err.Error(), "The clip must be a WAV file.") {
+		t.Errorf("want the server's message, got %v", err)
+	}
+}
