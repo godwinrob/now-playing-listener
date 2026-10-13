@@ -2,9 +2,9 @@
 // heartbeat, sign off), so this is plain net/http rather than a client generated from the server's
 // OpenAPI contract: it keeps this repo from depending on the server's.
 //
-//	POST   /api/listen              multipart "audio" (WAV) and "recordedAt"; returns the recognition and mode
-//	POST   /api/listener/heartbeat  JSON {"level": dBFS, "mode": "searching"|"tracking"}; 204
-//	DELETE /api/listener/heartbeat  the microphone is off; 204
+//	POST /api/listener/clips      multipart "audio" (WAV) and "recordedAt"; returns the recognition and mode
+//	POST /api/listener/heartbeat  JSON {"level": dBFS, "mode": "searching"|"tracking"}; 204
+//	POST /api/listener/sign-off   the microphone is off; 204
 //
 // Every call carries "Authorization: Bearer <API key>". Make the key on the server's Host page.
 package server
@@ -68,7 +68,7 @@ func (c *Client) Upload(ctx context.Context, wav []byte, recordedAt time.Time) (
 	if err := mw.Close(); err != nil {
 		return Result{}, err
 	}
-	status, raw, err := c.do(ctx, http.MethodPost, "/api/listen", mw.FormDataContentType(), &body)
+	status, raw, err := c.do(ctx, http.MethodPost, "/api/listener/clips", mw.FormDataContentType(), &body)
 	if err != nil {
 		return Result{}, fmt.Errorf("uploading clip: %w", err)
 	}
@@ -118,7 +118,7 @@ func (c *Client) Heartbeat(ctx context.Context, levelDBFS float64, mode string) 
 // SignOff tells the server this listener is stopping, so it shows as offline at once instead of
 // after its heartbeats time out.
 func (c *Client) SignOff(ctx context.Context) error {
-	status, raw, err := c.do(ctx, http.MethodDelete, "/api/listener/heartbeat", "", nil)
+	status, raw, err := c.do(ctx, http.MethodPost, "/api/listener/sign-off", "", nil)
 	if err != nil {
 		return fmt.Errorf("signing off: %w", err)
 	}

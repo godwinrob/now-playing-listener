@@ -16,7 +16,7 @@ func TestUploadSendsTokenAndClip(t *testing.T) {
 	var gotAuth, gotRecorded string
 	var gotAudio []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/listen" || r.Method != "POST" {
+		if r.URL.Path != "/api/listener/clips" || r.Method != "POST" {
 			t.Errorf("%s %s", r.Method, r.URL.Path)
 		}
 		gotAuth = r.Header.Get("Authorization")
@@ -105,7 +105,7 @@ func TestSignOffAndServerMessages(t *testing.T) {
 	var gotMethod, gotAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotMethod, gotAuth = r.Method, r.Header.Get("Authorization")
-		if r.URL.Path != "/api/listener/heartbeat" {
+		if r.URL.Path != "/api/listener/sign-off" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -118,7 +118,7 @@ func TestSignOffAndServerMessages(t *testing.T) {
 	if err := c.SignOff(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if gotMethod != http.MethodDelete || gotAuth != "Bearer npk_abc" {
+	if gotMethod != http.MethodPost || gotAuth != "Bearer npk_abc" {
 		t.Errorf("sign-off sent %s with %q", gotMethod, gotAuth)
 	}
 

@@ -105,9 +105,9 @@ Three calls, all with `Authorization: Bearer <API key>`:
 
 | Call | Does |
 | --- | --- |
-| `POST /api/listen` | Uploads a WAV clip (multipart `audio`, `recordedAt`); the answer says what it was and what to do next |
+| `POST /api/listener/clips` | Uploads a WAV clip (multipart `audio`, `recordedAt`); the answer says what it was and what to do next |
 | `POST /api/listener/heartbeat` | `{"level": dBFS, "mode": "searching" or "tracking"}` every 30 seconds |
-| `DELETE /api/listener/heartbeat` | The listener is stopping, so the server shows it offline at once |
+| `POST /api/listener/sign-off` | The listener is stopping, so the server shows it offline at once |
 
 ## Develop and release
 
